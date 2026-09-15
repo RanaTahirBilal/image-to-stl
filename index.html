@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Relief STL Maker</title>
+<meta name="description" content="Upload an image and turn it into a 3D printable relief STL, entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#eef0ec; --surface:#ffffff; --sunken:#e4e7e2; --ink:#161a1d; --muted:#5b635e;
+  --line:#d5d9d2; --accent:#c7440e; --accent-ink:#ffffff; --accent-soft:#f7e1d6;
+  --ok:#1f7a4a; --ok-soft:#dcefe3; --warn:#8a5a00; --warn-soft:#f6ead0; --err:#b3261e; --err-soft:#f8dedb;
+  --viewer:#dfe3dd; --model:#e4dccb; --grid:#c6ccc4; --grid-major:#a3aba1;
+  --display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#111315; --surface:#1a1d20; --sunken:#23272b; --ink:#e9ebe7; --muted:#9aa29c;
+    --line:#2e3337; --accent:#ff7a3d; --accent-ink:#1a0d05; --accent-soft:#3a2216;
+    --ok:#6fcf97; --ok-soft:#173226; --warn:#f0c060; --warn-soft:#352a12; --err:#ff8a80; --err-soft:#3b1d1b;
+    --viewer:#181b1e; --model:#d8cfbd; --grid:#2b3034; --grid-major:#3f464b;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#111315; --surface:#1a1d20; --sunken:#23272b; --ink:#e9ebe7; --muted:#9aa29c;
+  --line:#2e3337; --accent:#ff7a3d; --accent-ink:#1a0d05; --accent-soft:#3a2216;
+  --ok:#6fcf97; --ok-soft:#173226; --warn:#f0c060; --warn-soft:#352a12; --err:#ff8a80; --err-soft:#3b1d1b;
+  --viewer:#181b1e; --model:#d8cfbd; --grid:#2b3034; --grid-major:#3f464b;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{
+  background:var(--ground); color:var(--ink); font:15px/1.55 var(--sans);
+  padding-inline:max(16px, env(safe-area-inset-left, 0px)); padding-block:0 48px;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px; margin-inline:auto}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+.hero{padding-block:clamp(40px,8vw,88px) 32px; display:grid; gap:28px}
+.brand{font:500 12px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); display:flex; gap:10px; align-items:center}
+.brand i{width:10px;height:10px;background:var(--accent);display:inline-block;border-radius:2px}
+h1{font:700 clamp(38px,6.4vw,76px)/.98 var(--display); letter-spacing:-.025em; margin:0; max-width:14ch; text-wrap:balance}
+.sub{font-size:clamp(16px,1.6vw,19px); color:var(--muted); margin:0; max-width:46ch}
+.dropzone{
+  border:1.5px dashed var(--grid-major); border-radius:14px; background:var(--surface);
+  padding:28px; display:flex; flex-wrap:wrap; align-items:center; gap:20px 28px; transition:border-color .15s, background .15s;
+}
+.dropzone.over{border-color:var(--accent); background:var(--accent-soft)}
+.dropzone p{margin:0; color:var(--muted); font-size:14px}
+.dropzone p strong{color:var(--ink); font-weight:600}
+.has-image .dropzone{display:none}
+
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:10px; border:1px solid transparent;
+  padding:12px 20px; font-weight:600; cursor:pointer; transition:background .15s, border-color .15s, opacity .15s; white-space:nowrap;
+}
+.btn-primary{background:var(--accent); color:var(--accent-ink)}
+.btn-primary:hover:not(:disabled){filter:brightness(1.07)}
+.btn-dark{background:var(--ink); color:var(--ground)}
+.btn-ghost{background:transparent; border-color:var(--line)}
+.btn-ghost:hover:not(:disabled){background:var(--sunken)}
+.btn-sm{padding:7px 12px; font-size:13px; border-radius:8px}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.btn-lg{padding:15px 26px; font-size:16px}
+
+.status{margin-block:0 20px; padding:12px 16px; border-radius:10px; font-size:14px; background:var(--sunken); border-left:3px solid var(--muted)}
+.status[data-kind="error"]{background:var(--err-soft); border-color:var(--err); color:var(--ink)}
+.status[data-kind="ok"]{background:var(--ok-soft); border-color:var(--ok)}
+.status[data-kind="warn"]{background:var(--warn-soft); border-color:var(--warn)}
+
+.workspace{display:grid; grid-template-columns:minmax(0,360px) minmax(0,1fr); gap:20px; align-items:start; scroll-margin-top:16px}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px; display:grid; gap:16px}
+.side{display:grid; gap:20px}
+.label{font:500 11px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0}
+.thumb{background:var(--sunken) repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/16px 16px; border-radius:10px; display:grid; place-items:center; overflow:hidden; aspect-ratio:4/3}
+.thumb img{max-width:100%; max-height:100%; object-fit:contain; display:block}
+.meta{display:grid; gap:4px; min-width:0}
+.meta .fname{font-weight:600; overflow-wrap:anywhere}
+.meta .fdet{font:13px/1.4 var(--mono); color:var(--muted); display:flex; gap:12px; flex-wrap:wrap}
+.row{display:flex; gap:8px; flex-wrap:wrap}
+
+.fields{display:grid; gap:14px}
+.field{display:grid; grid-template-columns:1fr 118px; align-items:center; gap:12px}
+.field label{font-weight:500}
+.field small{display:block; color:var(--muted); font-size:12px; font-weight:400}
+.unit{display:flex; align-items:center; background:var(--sunken); border:1px solid var(--line); border-radius:8px; padding-inline:10px 10px}
+.unit:focus-within{border-color:var(--accent)}
+.unit input{width:100%; min-width:0; border:0; background:transparent; padding:9px 0; font:500 15px var(--mono); font-variant-numeric:tabular-nums; outline:none; text-align:right}
+.unit span{font:13px var(--mono); color:var(--muted); padding-left:6px}
+fieldset{border:0; margin:0; padding:0; display:grid; gap:8px}
+legend{font-weight:500; padding:0; margin-bottom:8px}
+.seg{position:relative; display:grid; grid-template-columns:repeat(3,1fr); background:var(--sunken); border:1px solid var(--line); border-radius:9px; padding:3px; gap:3px}
+.seg input{position:absolute; opacity:0; pointer-events:none}
+.seg label{text-align:center; padding:7px 4px; border-radius:6px; cursor:pointer; font-size:14px; font-weight:500; color:var(--muted)}
+.seg input:checked + label{background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgb(0 0 0 / .12)}
+.seg input:focus-visible + label{outline:2px solid var(--accent)}
+.check{display:flex; gap:10px; align-items:flex-start; cursor:pointer}
+.check input{width:18px; height:18px; accent-color:var(--accent); margin-top:3px; flex:none}
+.check small{display:block; color:var(--muted); font-size:12px}
+.out{font:12px/1.5 var(--mono); color:var(--muted); background:var(--sunken); border-radius:8px; padding:10px 12px; overflow-wrap:anywhere}
+.gen{width:100%}
+
+.stage{background:var(--surface); border:1px solid var(--line); border-radius:14px; overflow:hidden; display:grid; position:sticky; top:calc(env(safe-area-inset-top, 0px) + 16px)}
+.stage-head{display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap}
+.stage-head .label{display:flex; gap:8px; align-items:center}
+.dot{width:8px; height:8px; border-radius:50%; background:var(--grid-major)}
+.has-model .dot{background:var(--ok)}
+.viewer{position:relative; aspect-ratio:4/3; max-width:100%; background:
+  radial-gradient(ellipse at 50% 35%, var(--surface), var(--viewer) 75%); touch-action:none}
+.viewer canvas{position:absolute; inset:0; width:100%!important; height:100%!important; display:block; cursor:grab}
+.viewer canvas:active{cursor:grabbing}
+.viewer-empty{position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:24px; color:var(--muted); font-size:14px; pointer-events:none}
+.viewer-empty::before{content:""; position:absolute; inset:18% 22%; border:1.5px dashed var(--grid-major); border-radius:6px; transform:perspective(500px) rotateX(52deg)}
+.hint{position:absolute; left:12px; bottom:10px; font:11px var(--mono); color:var(--muted); pointer-events:none; opacity:0; transition:opacity .2s}
+.has-model .hint{opacity:.9}
+.stage-foot{display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between; padding:16px; border-top:1px solid var(--line)}
+.stats{display:flex; flex-wrap:wrap; gap:6px 22px; margin:0}
+.stats div{display:grid; gap:2px}
+.stats dt{font:500 10px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+.stats dd{margin:0; font:500 14px var(--mono); font-variant-numeric:tabular-nums}
+.stale{font-size:13px; color:var(--warn); margin:0}
+.dl-wrap{display:flex; flex-direction:column; align-items:flex-end; gap:6px; margin-left:auto}
+.dl-wrap small{font:11px var(--mono); color:var(--muted)}
+
+.foot{margin-top:40px; color:var(--muted); font-size:13px; display:flex; gap:8px 20px; flex-wrap:wrap}
+
+@media (max-width:860px){
+  .workspace{grid-template-columns:minmax(0,1fr)}
+  .stage{position:static}
+}
+@media (max-width:420px){
+  .field{grid-template-columns:1fr 104px}
+  .dl-wrap{align-items:stretch; margin-left:0; width:100%}
+  .dropzone .btn{width:100%}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="brand"><i></i>Relief STL Maker</div>
+    <h1>Convert Any Image to an STL File</h1>
+    <p class="sub">Upload an image and turn it into a 3D printable relief in seconds.</p>
+    <div class="dropzone" id="dropzone">
+      <button class="btn btn-primary btn-lg" id="pick-btn" type="button" disabled>Upload Image</button>
+      <p><strong>or drop a file here.</strong> PNG, JPG or WEBP, up to 25 MB.<br>Your image stays on this device — nothing is uploaded.</p>
+      <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" hidden>
+    </div>
+  </header>
+
+  <div class="status" id="status" role="status" aria-live="polite" hidden></div>
+
+  <main class="workspace" id="workspace" hidden>
+    <div class="side">
+      <section class="panel" aria-labelledby="img-h">
+        <h2 class="label" id="img-h">Image</h2>
+        <div class="thumb"><img id="preview-img" alt=""></div>
+        <div class="meta">
+          <span class="fname" id="file-name"></span>
+          <span class="fdet"><span id="file-dims"></span><span id="file-size"></span></span>
+        </div>
+        <div class="row">
+          <button class="btn btn-ghost btn-sm" id="replace-btn" type="button">Replace</button>
+          <button class="btn btn-ghost btn-sm" id="remove-btn" type="button">Remove</button>
+        </div>
+      </section>
+
+      <section class="panel" id="settings" aria-labelledby="set-h">
+        <h2 class="label" id="set-h">STL settings</h2>
+        <div class="fields">
+          <div class="field">
+            <label for="opt-width">Model width<small>Along the image’s width</small></label>
+            <div class="unit"><input id="opt-width" type="number" inputmode="decimal" min="10" max="500" step="1" value="100"><span>mm</span></div>
+          </div>
+          <div class="field">
+            <label for="opt-base">Base thickness<small>Solid plate under the relief</small></label>
+            <div class="unit"><input id="opt-base" type="number" inputmode="decimal" min="0.5" max="20" step="0.5" value="2"><span>mm</span></div>
+          </div>
+          <div class="field">
+            <label for="opt-relief">Relief height<small>Added on top at full brightness</small></label>
+            <div class="unit"><input id="opt-relief" type="number" inputmode="decimal" min="0" max="50" step="0.5" value="5"><span>mm</span></div>
+          </div>
+        </div>
+        <fieldset>
+          <legend>Resolution</legend>
+          <div class="seg">
+            <input type="radio" name="resolution" id="res-low" value="low"><label for="res-low">Low</label>
+            <input type="radio" name="resolution" id="res-medium" value="medium" checked><label for="res-medium">Medium</label>
+            <input type="radio" name="resolution" id="res-high" value="high"><label for="res-high">High</label>
+          </div>
+        </fieldset>
+        <label class="check" for="opt-invert">
+          <input type="checkbox" id="opt-invert">
+          <span><span id="invert-label">Light areas high</span><small>Tick to raise dark areas instead</small></span>
+        </label>
+        <div class="out" id="out-size" aria-live="polite">—</div>
+        <button class="btn btn-dark btn-lg gen" id="gen-btn" type="button">Generate STL</button>
+      </section>
+    </div>
+
+    <section class="stage" aria-labelledby="view-h">
+      <div class="stage-head">
+        <h2 class="label" id="view-h"><span class="dot"></span>STL preview</h2>
+        <button class="btn btn-ghost btn-sm" id="reset-btn" type="button" disabled>Reset camera</button>
+      </div>
+      <div class="viewer" id="viewer">
+        <div class="viewer-empty" id="viewer-empty">Your model appears here after you generate it.</div>
+        <div class="hint">Drag to rotate · Scroll or pinch to zoom · Right-drag or two-finger drag to pan</div>
+      </div>
+      <div class="stage-foot">
+        <dl class="stats" id="model-stats" hidden></dl>
+        <p class="stale" id="stale-note" hidden>Settings changed — generate again to update the file.</p>
+        <div class="dl-wrap">
+          <button class="btn btn-primary btn-lg" id="dl-btn" type="button" disabled>Download STL</button>
+          <small>image-to-stl.stl · binary</small>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>Runs entirely in your browser.</span>
+    <span>Units: millimetres.</span>
+  </footer>
+</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+<script type="module" src="./app.js"></script>
+<script>
+setTimeout(function () {
+  if (window.__appReady) return;
+  var s = document.getElementById('status');
+  s.textContent = 'The 3D engine didn\u2019t load. Check your internet connection and reload the page.';
+  s.dataset.kind = 'error';
+  s.hidden = false;
+}, 10000);
+</script>
+</body>
+</html>
