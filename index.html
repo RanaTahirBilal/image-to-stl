@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Relief STL Maker</title>
-<meta name="description" content="Upload an image and turn it into a 3D printable relief STL, entirely in your browser.">
+<meta name="description" content="Turn a photo or logo into a 3D-printable coin or plaque STL, free and entirely in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -100,7 +100,7 @@ h1{font:700 clamp(38px,6.4vw,76px)/.98 var(--display); letter-spacing:-.025em; m
 .unit span{font:13px var(--mono); color:var(--muted); padding-left:6px}
 fieldset{border:0; margin:0; padding:0; display:grid; gap:8px}
 legend{font-weight:500; padding:0; margin-bottom:8px}
-.seg{position:relative; display:grid; grid-template-columns:repeat(3,1fr); background:var(--sunken); border:1px solid var(--line); border-radius:9px; padding:3px; gap:3px}
+.seg{position:relative; display:grid; grid-auto-flow:column; grid-auto-columns:1fr; background:var(--sunken); border:1px solid var(--line); border-radius:9px; padding:3px; gap:3px}
 .seg input{position:absolute; opacity:0; pointer-events:none}
 .seg label{text-align:center; padding:7px 4px; border-radius:6px; cursor:pointer; font-size:14px; font-weight:500; color:var(--muted)}
 .seg input:checked + label{background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgb(0 0 0 / .12)}
@@ -145,6 +145,26 @@ legend{font-weight:500; padding:0; margin-bottom:8px}
   .dropzone .btn{width:100%}
 }
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+.preview{display:grid; gap:10px}
+.preview canvas{width:100%; max-width:100%; display:block; border-radius:10px; background:var(--sunken) repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0/16px 16px}
+.seg-sm label{padding:5px 4px; font-size:13px}
+.sliders{display:grid; gap:12px}
+.slider{display:grid; grid-template-columns:1fr auto; gap:4px 12px; align-items:center}
+.slider label{font-weight:500}
+.slider label small{display:block; color:var(--muted); font-size:12px; font-weight:400}
+.slider output{font:500 13px var(--mono); color:var(--muted); font-variant-numeric:tabular-nums; min-width:5ch; text-align:right}
+.slider input[type=range]{grid-column:1 / -1; width:100%; accent-color:var(--accent); margin:0}
+.group-label{font-weight:500; margin:0 0 8px}
+.ai{display:grid; gap:8px; background:var(--sunken); border-radius:10px; padding:12px; font-size:13px}
+.ai-track{height:6px; border-radius:99px; background:var(--line); overflow:hidden}
+.ai-bar{height:100%; width:0; background:var(--accent); transition:width .2s}
+.ai[data-state="done"] .ai-bar{background:var(--ok)}
+.ai[data-state="error"]{background:var(--err-soft)}
+.ai[data-state="error"] .ai-track{display:none}
+.ai[data-state="done"] .ai-track{display:none}
+.ai p{margin:0}
+.note{font-size:12px; color:var(--muted); margin:0}
+.finish{min-width:210px}
 </style>
 </head>
 <body>
@@ -152,10 +172,10 @@ legend{font-weight:500; padding:0; margin-bottom:8px}
   <header class="hero">
     <div class="brand"><i></i>Relief STL Maker</div>
     <h1>Convert Any Image to an STL File</h1>
-    <p class="sub">Upload an image and turn it into a 3D printable relief in seconds.</p>
+    <p class="sub">Turn a photo or a logo into a 3D-printable coin or plaque. Free, and nothing leaves your device.</p>
     <div class="dropzone" id="dropzone">
       <button class="btn btn-primary btn-lg" id="pick-btn" type="button" disabled>Upload Image</button>
-      <p><strong>or drop a file here.</strong> PNG, JPG or WEBP, up to 25 MB.<br>Your image stays on this device — nothing is uploaded.</p>
+      <p><strong>or drop a file here.</strong> PNG, JPG or WEBP, up to 25 MB.<br>Photos are read by a free AI model that runs in your browser.</p>
       <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" hidden>
     </div>
   </header>
@@ -166,7 +186,18 @@ legend{font-weight:500; padding:0; margin-bottom:8px}
     <div class="side">
       <section class="panel" aria-labelledby="img-h">
         <h2 class="label" id="img-h">Image</h2>
-        <div class="thumb"><img id="preview-img" alt=""></div>
+        <div class="preview">
+          <div class="seg seg-sm" id="view-toggle" role="radiogroup" aria-label="Preview">
+            <input type="radio" name="view" id="view-photo" value="photo"><label for="view-photo">Photo</label>
+            <input type="radio" name="view" id="view-relief" value="relief" checked><label for="view-relief">Relief</label>
+          </div>
+          <canvas id="preview-canvas" width="320" height="320" aria-label="Preview of the image and relief"></canvas>
+        </div>
+        <div class="sliders" id="frame-controls">
+          <div class="slider"><label for="zoom">Zoom</label><output data-for="zoom" data-x="1"></output><input type="range" id="zoom" min="1" max="4" step="0.01" value="1"></div>
+          <div class="slider"><label for="panx">Move left / right</label><output data-for="panx"></output><input type="range" id="panx" min="-1" max="1" step="0.01" value="0"></div>
+          <div class="slider"><label for="pany">Move up / down</label><output data-for="pany"></output><input type="range" id="pany" min="-1" max="1" step="0.01" value="0"></div>
+        </div>
         <div class="meta">
           <span class="fname" id="file-name"></span>
           <span class="fdet"><span id="file-dims"></span><span id="file-size"></span></span>
@@ -177,21 +208,55 @@ legend{font-weight:500; padding:0; margin-bottom:8px}
         </div>
       </section>
 
-      <section class="panel" id="settings" aria-labelledby="set-h">
-        <h2 class="label" id="set-h">STL settings</h2>
-        <div class="fields">
-          <div class="field">
-            <label for="opt-width">Model width<small>Along the image’s width</small></label>
-            <div class="unit"><input id="opt-width" type="number" inputmode="decimal" min="10" max="500" step="1" value="100"><span>mm</span></div>
+      <section class="panel" id="design" aria-labelledby="design-h">
+        <h2 class="label" id="design-h">Design</h2>
+        <fieldset>
+          <legend>Shape</legend>
+          <div class="seg">
+            <input type="radio" name="shape" id="shape-coin" value="coin" checked><label for="shape-coin">Coin</label>
+            <input type="radio" name="shape" id="shape-plaque" value="plaque"><label for="shape-plaque">Plaque</label>
           </div>
-          <div class="field">
-            <label for="opt-base">Base thickness<small>Solid plate under the relief</small></label>
-            <div class="unit"><input id="opt-base" type="number" inputmode="decimal" min="0.5" max="20" step="0.5" value="2"><span>mm</span></div>
+        </fieldset>
+        <fieldset>
+          <legend>Image type</legend>
+          <div class="seg">
+            <input type="radio" name="kind" id="kind-photo" value="photo" checked><label for="kind-photo">Photo (AI depth)</label>
+            <input type="radio" name="kind" id="kind-art" value="art"><label for="kind-art">Logo / art</label>
           </div>
-          <div class="field">
-            <label for="opt-relief">Relief height<small>Added on top at full brightness</small></label>
-            <div class="unit"><input id="opt-relief" type="number" inputmode="decimal" min="0" max="50" step="0.5" value="5"><span>mm</span></div>
-          </div>
+        </fieldset>
+
+        <div class="ai" id="ai-box" hidden>
+          <p id="ai-label">Loading the free AI…</p>
+          <div class="ai-track"><div class="ai-bar" id="ai-bar"></div></div>
+          <button class="btn btn-ghost btn-sm" id="ai-retry" type="button" hidden>Retry</button>
+        </div>
+
+        <div class="sliders" id="photo-opts">
+          <div class="slider"><label for="opt-flatten">Flatten depth<small>Higher looks more like a real coin</small></label><output data-for="opt-flatten" data-pct="1"></output><input type="range" id="opt-flatten" min="0" max="1" step="0.05" value="0.5"></div>
+          <div class="slider"><label for="opt-detail">Fine detail<small>Hair, eyes and texture from the photo</small></label><output data-for="opt-detail" data-pct="1"></output><input type="range" id="opt-detail" min="0" max="1" step="0.05" value="0.4"></div>
+          <div class="slider"><label for="opt-smooth">Smoothing</label><output data-for="opt-smooth"></output><input type="range" id="opt-smooth" min="0" max="4" step="0.1" value="0.8"></div>
+          <label class="check" for="opt-bg"><input type="checkbox" id="opt-bg" checked><span>Flat background<small>Keep the person, flatten everything behind them</small></span></label>
+        </div>
+
+        <div class="sliders" id="art-opts" hidden>
+          <label class="check" for="opt-invert"><input type="checkbox" id="opt-invert"><span>Raise dark areas<small>Off: light areas are raised</small></span></label>
+          <div class="slider"><label for="opt-art-smooth">Smoothing</label><output data-for="opt-art-smooth"></output><input type="range" id="opt-art-smooth" min="0" max="4" step="0.1" value="0.6"></div>
+          <div class="slider"><label for="opt-gamma">Contrast curve<small>Below 1 lifts mid-tones, above 1 sinks them</small></label><output data-for="opt-gamma"></output><input type="range" id="opt-gamma" min="0.4" max="2.5" step="0.05" value="1"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="size-panel" aria-labelledby="set-h">
+        <h2 class="label" id="set-h">Size &amp; print</h2>
+        <div class="fields" id="coin-size">
+          <div class="field"><label for="coin-diameter">Diameter</label><div class="unit"><input id="coin-diameter" type="number" inputmode="decimal" min="10" max="200" step="1" value="40"><span>mm</span></div></div>
+          <div class="field"><label for="coin-base">Base thickness<small>Solid disc under the design</small></label><div class="unit"><input id="coin-base" type="number" inputmode="decimal" min="0.5" max="10" step="0.1" value="2"><span>mm</span></div></div>
+          <div class="field"><label for="coin-relief">Relief height<small>Tallest point of the design</small></label><div class="unit"><input id="coin-relief" type="number" inputmode="decimal" min="0.2" max="10" step="0.1" value="1.5"><span>mm</span></div></div>
+          <div class="field"><label for="coin-rim">Rim width<small>Raised edge; 0 for none</small></label><div class="unit"><input id="coin-rim" type="number" inputmode="decimal" min="0" max="20" step="0.1" value="1.5"><span>mm</span></div></div>
+        </div>
+        <div class="fields" id="plaque-size" hidden>
+          <div class="field"><label for="plaque-width">Width<small>Along the image’s width</small></label><div class="unit"><input id="plaque-width" type="number" inputmode="decimal" min="10" max="500" step="1" value="100"><span>mm</span></div></div>
+          <div class="field"><label for="plaque-base">Base thickness</label><div class="unit"><input id="plaque-base" type="number" inputmode="decimal" min="0.5" max="20" step="0.5" value="2"><span>mm</span></div></div>
+          <div class="field"><label for="plaque-relief">Relief height</label><div class="unit"><input id="plaque-relief" type="number" inputmode="decimal" min="0.2" max="50" step="0.5" value="3"><span>mm</span></div></div>
         </div>
         <fieldset>
           <legend>Resolution</legend>
@@ -200,11 +265,8 @@ legend{font-weight:500; padding:0; margin-bottom:8px}
             <input type="radio" name="resolution" id="res-medium" value="medium" checked><label for="res-medium">Medium</label>
             <input type="radio" name="resolution" id="res-high" value="high"><label for="res-high">High</label>
           </div>
+          <p class="note" id="res-hint"></p>
         </fieldset>
-        <label class="check" for="opt-invert">
-          <input type="checkbox" id="opt-invert">
-          <span><span id="invert-label">Light areas high</span><small>Tick to raise dark areas instead</small></span>
-        </label>
         <div class="out" id="out-size" aria-live="polite">—</div>
         <button class="btn btn-dark btn-lg gen" id="gen-btn" type="button">Generate STL</button>
       </section>
@@ -213,7 +275,14 @@ legend{font-weight:500; padding:0; margin-bottom:8px}
     <section class="stage" aria-labelledby="view-h">
       <div class="stage-head">
         <h2 class="label" id="view-h"><span class="dot"></span>STL preview</h2>
-        <button class="btn btn-ghost btn-sm" id="reset-btn" type="button" disabled>Reset camera</button>
+        <div class="row">
+          <div class="seg seg-sm finish" role="radiogroup" aria-label="Preview finish">
+            <input type="radio" name="finish" id="fin-filament" value="filament" checked><label for="fin-filament">Filament</label>
+            <input type="radio" name="finish" id="fin-silver" value="silver"><label for="fin-silver">Silver</label>
+            <input type="radio" name="finish" id="fin-gold" value="gold"><label for="fin-gold">Gold</label>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="reset-btn" type="button" disabled>Reset camera</button>
+        </div>
       </div>
       <div class="viewer" id="viewer">
         <div class="viewer-empty" id="viewer-empty">Your model appears here after you generate it.</div>
@@ -233,6 +302,7 @@ legend{font-weight:500; padding:0; margin-bottom:8px}
   <footer class="foot">
     <span>Runs entirely in your browser.</span>
     <span>Units: millimetres.</span>
+    <span>AI: Depth Anything V2 Small and MODNet (Apache-2.0).</span>
   </footer>
 </div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
@@ -241,10 +311,10 @@ legend{font-weight:500; padding:0; margin-bottom:8px}
 setTimeout(function () {
   if (window.__appReady) return;
   var s = document.getElementById('status');
-  s.textContent = 'The 3D engine didn\u2019t load. Check your internet connection and reload the page.';
+  s.textContent = 'The app didn’t load. Check your internet connection and reload the page.';
   s.dataset.kind = 'error';
   s.hidden = false;
-}, 10000);
+}, 15000);
 </script>
 </body>
 </html>

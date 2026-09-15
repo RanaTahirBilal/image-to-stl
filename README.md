@@ -1,17 +1,27 @@
-# Image to STL
+# Relief STL Maker
 
-Upload a PNG, JPG or WEBP image and turn it into a 3D-printable relief STL, entirely in the browser. Nothing is uploaded to a server.
+Turn a photo or a logo into a 3D-printable coin or plaque STL. Free, no account, and everything runs in the browser: nothing is uploaded.
+
+Live: https://ranatahirbilal.github.io/image-to-stl/
 
 ## How it works
 
-1. The image is scaled to a height-map grid (Low 150 / Medium 300 / High 600 samples on the long side, never upscaled).
-2. Each sample becomes a vertex: height = base thickness + gray x relief height (light = high by default; transparent = low).
-3. The mesh is the top surface, four side walls and a flat bottom at Z = 0, all sharing vertices.
-4. Before download the mesh is checked: closed and watertight (every edge shared by exactly two faces with consistent winding), no NaN or infinite coordinates, no degenerate triangles, no duplicate vertices, non-zero size, positive volume.
-5. Exported as binary STL with the three.js STLExporter and previewed with three.js and OrbitControls (three.js r169, loaded from jsDelivr).
+- Photos: two free AI models run on your device through Transformers.js.
+  - Depth Anything V2 Small (Apache-2.0) estimates depth, so faces come out as real 3D shapes instead of light and dark bumps.
+  - MODNet (Apache-2.0) finds the person so the background can be made flat.
+  - The depth is turned into a bas-relief: the overall slope is flattened, local shape is kept, and fine detail from the photo is added back.
+- Logos and artwork: brightness becomes height (light high, or dark high), with contrast stretch, smoothing and a contrast curve.
+- Coins are meshed as concentric rings with evenly spaced points, a raised rim, a vertical edge and a flat back. Plaques use a rectangular grid.
+- Before download every mesh is checked: closed and watertight, consistent winding, no NaN or infinite coordinates, no degenerate triangles, no duplicate vertices, non-zero size, positive volume.
+- Exported as binary STL with the three.js STLExporter and previewed with three.js.
+
+The AI models (about 50 to 65 MB) download once on first use and are cached by the browser.
 
 ## Files
 
 - index.html: page and styles
-- app.js: upload, settings, preview, download
-- mesh.js: height map to watertight mesh, and mesh validation
+- app.js: upload, settings, previews, download
+- depth.js: loads and runs the free AI models
+- heights.js: height-map processing (bas-relief, detail, smoothing, shading)
+- coin.js: round coin mesh
+- mesh.js: rectangular plaque mesh and mesh validation
